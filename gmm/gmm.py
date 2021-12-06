@@ -1,37 +1,7 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[34]:
-
-
-#GMM Clustering
-
-
-# In[35]:
-
-
-df=pd.read_csv(r'CSE575-HW03-Data.csv',header=None)
-
-
-# In[36]:
-
-
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-
-
-# In[37]:
-
-
-import numpy as np
-x=np.array(df)
-
-
-# In[38]:
-
-
-import numpy as np
+import seaborn as sns
 from scipy.stats import multivariate_normal
 
 class GMM:
@@ -90,27 +60,12 @@ class GMM:
         return np.argmax(weights, axis=1)
 
 
-# In[39]:
-
+df=pd.read_csv(r'CSE575-HW03-Data.csv',header=None)
+x=np.array(df)
 
 gmm = GMM(k=2, max_iter=100)
 gmm.fit(x)
-
-
-# In[40]:
-
-
 gmm.predict(x)
-
-
-# In[41]:
-
-
-import seaborn as sns
-
-
-# In[42]:
-
 
 plt.figure(figsize=(9,7))
 sns.scatterplot(data=df, 
