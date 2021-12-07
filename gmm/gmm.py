@@ -1,76 +1,71 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import matplotlib.pyplot as mplot
+import seaborn as sb
 from scipy.stats import multivariate_normal
 
+
 class GMM:
-    def __init__(self, k, max_iter=5):
-        self.k = k
-        self.max_iter = int(max_iter)
-
-    def initialize(self, X):
-        self.shape = X.shape
-        self.n, self.m = self.shape
-
-        self.phi = np.full(shape=self.k, fill_value=1/self.k)
-        self.weights = np.full( shape=self.shape, fill_value=1/self.k)
-        
-        random_row = np.random.randint(low=0, high=self.n, size=self.k)
-        self.mu = [  X[row_index,:] for row_index in random_row ]
-        self.sigma = [ np.cov(X.T) for _ in range(self.k) ]
-
-    def e_step(self, X):
-        # E-Step: update weights and phi holding mu and sigma constant
-        self.weights = self.predict_proba(X)
-        self.phi = self.weights.mean(axis=0)
+    def __init__(self, num_components, max_iterations=5):
+        self.num_components = num_components
+        self.max_iterations = int(max_iterations)
     
-    def m_step(self, X):
-        # M-Step: update mu and sigma holding phi and weights constant
-        for i in range(self.k):
-            weight = self.weights[:, [i]]
-            total_weight = weight.sum()
-            self.mu[i] = (X * weight).sum(axis=0) / total_weight
-            self.sigma[i] = np.cov(X.T, 
-                aweights=(weight/total_weight).flatten(), 
-                bias=True)
+    def initialize(self, V):
+        self.shape = V.shape
+        self.r, self.c = self.shape
 
-    def fit(self, X):
-        self.initialize(X)
-        
-        for iteration in range(self.max_iter):
-            self.e_step(X)
-            self.m_step(X)
-            
-    def predict_proba(self, X):
-        likelihood = np.zeros( (self.n, self.k) )
-        for i in range(self.k):
-            distribution = multivariate_normal(
-                mean=self.mu[i], 
-                cov=self.sigma[i])
-            likelihood[:,i] = distribution.pdf(X)
-        
-        numerator = likelihood * self.phi
-        denominator = numerator.sum(axis=1)[:, np.newaxis]
-        weights = numerator / denominator
-        return weights
-    
-    def predict(self, X):
-        weights = self.predict_proba(X)
-        return np.argmax(weights, axis=1)
+        self.phi = np.full(shape=self.num_components, fill_value=1 / self.num_components)
+        self.wgt = np.full(shape=self.shape, fill_value=1 / self.num_components)
+
+        rand_partition = np.random.randint(low=0, high=self.r, size=self.num_components)
+        self.mu = [V[row_index, :] for row_index in rand_partition]
+        self.sigma = [np.cov(V.T) for _ in range(self.num_components)]
 
 
-df=pd.read_csv(r'CSE575-HW03-Data.csv',header=None)
-x=np.array(df)
+    def fit(self, V):
+        self.initialize(V)
+        for i in range(self.max_iterations):
+            self.EStep(V)
+            self.MStep(V)
 
-gmm = GMM(k=2, max_iter=100)
-gmm.fit(x)
-gmm.predict(x)
 
-plt.figure(figsize=(9,7))
-sns.scatterplot(data=df, 
-                x=0,
-                y=1, 
-                hue=gmm.predict(x),
-                palette=["red","blue"])
+    def predictWrapper(self, V):
+        p = np.zeros((self.r, self.num_components))
 
+        for i in range(self.num_components):
+            dist = multivariate_normal(mean=self.mu[i], cov=self.sigma[i])
+            p[:, i] = dist.pdf(V)
+
+        temp = p * self.phi
+        return temp / (temp.sum(axis=1)[:, np.newaxis])
+
+
+    def predict(self, V):
+        return np.argmax(self.predictWrapper(V), axis=1)
+
+
+    def EStep(self, V):
+        self.wgt = self.predictWrapper(V)
+        self.phi = self.wgt.mean(axis=0)
+
+
+    def MStep(self, V):
+        for i in range(self.num_components):
+            w = self.wgt[:, [i]]
+            total = w.sum()
+            self.mu[i] = (V * w).sum(axis=0) / total
+            self.sigma[i] = np.cov(V.T, aweights=(w / total).flatten(), bias=True)
+
+def main():
+    df = pd.read_csv(r"CSE575-HW03-Data.csv", header=None)
+    X = np.array(df)
+
+    gmm = GMM(num_components=2, max_iterations=15)
+    gmm.fit(X)
+    gmm.predict(X)
+
+    mplot.figure(figsize=(7.5, 7.5))
+    sb.scatterplot(data=df, x=0, y=1, hue=gmm.predict(X), palette=["red", "blue"])
+
+if __name__ == "__main__":
+    main()
