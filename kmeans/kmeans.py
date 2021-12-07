@@ -1,101 +1,96 @@
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as mplot
+import matplotlib.pyplot as plt
+import numpy as np
+import math
+import os
+
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'True'
+
+df = pd.read_csv(r'CSE575-HW03-Data.csv', header=None)
+
+x = np.array(df)
+
+df.isna
 
 
-class K_Means:
-    def __init__(self,num_components,data,initial_centroid=None):
-        self.num_components = num_components
-        self.data = data  
-        self.initial_centroid = initial_centroid
-        
-    def setInitialCentroidVal(self,num_components,data):
-        if(self.initial_centroid == 'random'): 
-            initial_centroids = np.random.permutation(data.shape[0])[:self.num_components]
-            self.centroids = data[initial_centroids]
-        elif(self.initial_centroid == 'firstk'):
-            self.centroids = data[:num_components]
-        else:
-            for i in range(self.num_components):
-                self.centroids.append(i%self.num_components)
-        return self.centroids    
- 
-    def fit(self,data):
-        shp = np.shape(data)[0]
-        centroid_val = self.setInitialCentroidVal(self.num_components,data)
-        centroid_orig_val = centroid_val.copy()
-        identify_cluster = np.mat(np.zeros((shp,2)))
-        
+class KMeansClustering():
+    def __init__(self, n_clusters=5):
+        self.n_clusters = n_clusters
+        self.centroids = None
 
-        flag = True
-        num_iter = 0
-        while flag and num_iter<100:
-            flag = False 
-            
-            for i in range(shp):
-                min_dist = np.inf
-                min_index = -1 
-                
-                for j in range(self.num_components):
-                    dist_ji = calcEuclidDist(centroid_val[j,:],data[i,:])
-                    if(dist_ji < min_dist):
-                        min_dist = dist_ji
-                        min_index = j 
-                    
-                    if identify_cluster[i, 0] != min_index: 
-                        flag = True
+    def fit_transform(self, X, n_iter=20):
+        size = X.shape[0]
+        xmax = X.max(dim=0)[0].unsqueeze(1)
+        xmin = X.min(dim=0)[0].unsqueeze(1)
 
-                identify_cluster[i, :] = min_index, min_dist**2
+        dists = torch.zeros((size, self.n_clusters))
+        best_loss = 1e10
+        pred = None
 
-            for cent in range(self.num_components):
-                coord = data[np.nonzero(identify_cluster[:,0].A==cent)[0]]
-                centroid_val[cent,:] = np.mean(coord, axis=0)
-    
-            num_iter += 1
-            
-        return centroid_val, identify_cluster, num_iter, centroid_orig_val
+        for _ in range(n_iter):
+            centroids = (xmin - xmax) * torch.rand((X.shape[1], self.n_clusters)) + xmax
+            old_loss = -1
+            while 1:
+                for i in range(self.n_clusters):
+                    ctr = centroids[:, i].unsqueeze(1)
+                    dists[:, i] = (X - ctr.T).pow(2).sum(dim=1).sqrt()
+                dists_min, labels = dists.min(dim=1)
+
+                for i in range(self.n_clusters):
+                    idx = torch.where(labels == i)[0]
+                    if len(idx) == 0:
+                        continue
+                    centroids[:, i] = X[idx].mean(dim=0)
+
+                new_loss = dists_min.sum()
+                if old_loss == new_loss:
+                    break
+                old_loss = new_loss
+            if new_loss < best_loss:
+                best_loss = new_loss
+                pred = labels
+        return pred, dists_min
 
 
-df=pd.read_csv(r'CSE575-HW03-Data.csv',header=None)
-x=np.array(df)
-df.isna()
+X = torch.from_numpy(x).float()
+
+objectiveCostValues1 = []
+objectiveCostValues2 = []
+objectiveCostValues3 = []
+
+kValues = []
 
 
-def calcEuclidDist(x1, x2):
-    return np.linalg.norm(x1-x2, axis=0)
+def k_means(k):
+    kms = KMeansClustering(n_clusters=k)
+    pred, dists_min = kms.fit_transform(X)
 
-def plot(index,centroids,orig_centroids):
-    input = []
-    colors = 10*["g","r","c","b","k"]
-
-    for i in range(len(index)):
-        for j in index[i]:
-            input.append(int(j))
-            
-    j=0
-    for i in input:
-        mplot.scatter(x[j,0], x[j,1], marker="x", color=colors[i], s=150, linewidths=5)
-        j+=1
-    
-    for cen in range(len(centroids)):
-        mplot.scatter(centroids[cen][0],centroids[cen][1],marker="o", color="k", s=150, linewidths=5)
-    
-    for cen in range(len(orig_centroids)):
-        mplot.scatter(orig_centroids[cen][0],orig_centroids[cen][1],marker="D", color="DarkBlue", s=150, linewidths=5)
+    objectiveCostValues1.append(torch.sum(dists_min))
+    objectiveCostValues2.append(torch.sum(dists_min ** 2))
+    objectiveCostValues3.append(math.sqrt(torch.sum(dists_min ** 2)))
+    kValues.append(k)
 
 
-def main():
-    kmeans = K_Means(num_components=2,data = x,initial_centroid='random')
-    centroids, cluster_assignments, iters, orig_centroids = kmeans.fit(x)
-    index = cluster_assignments[:,0]
-    plot(index,centroids,orig_centroids)
+for k in [2, 3, 4, 5, 6, 7, 8, 9]:
+    k_means(k)
+plt.figure('1')
+plt.plot(kValues, objectiveCostValues1)
+plt.xlabel("Values of K")
+plt.ylabel("Objective Cost (sum of distance)")
+plt.figure('2')
+plt.plot(kValues, objectiveCostValues2)
+plt.xlabel("Values of K")
+plt.ylabel("Objective Cost (sum of square of distance)")
+plt.figure('3')
+plt.plot(kValues, objectiveCostValues3)
+plt.xlabel("Values of K")
+plt.ylabel("Objective Cost (sqrt of sum of square of distance)")
+plt.figure('0')
 
-    x1=np.array(df)
-    x1=df.iloc[0:,0:2]
-    kmeans = K_Means(num_components=2,data = x1,initial_centroid='random')
-    centroids, cluster_assignments, iters, orig_centroids = kmeans.fit(x)
-    index = cluster_assignments[:,0]
-    plot(index,centroids,orig_centroids)
+x_2 = df.iloc[0:, 0:2]
+X = torch.from_numpy(np.array(x_2)).float()
 
-if __name__ == "__main__":
-    main()
+kms = KMeansClustering(n_clusters=2)
+pred, dists_min = kms.fit_transform(X)
+
+plt.scatter(X[:, 0], X[:, 1], c=pred)
