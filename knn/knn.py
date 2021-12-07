@@ -227,8 +227,4 @@ plt.title('Accuracy for train and test set')
 plt.show()
 
 
-# In[ ]:
-
-
-
 
